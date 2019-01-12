@@ -12,6 +12,8 @@
 #include<netinet/in.h>//struct sockaddr_in
 #include<unistd.h>//close
 #include<string.h>//memset
+#include<sys/stat.h>//open
+#include<fcntl.h>//open
 
 #define SERV_PORT 80
 #define MAXLINE 4096
@@ -24,10 +26,11 @@ err_exit(const char *err) {
 
 int
 main(int argc, char **argv) {
-    int listenfd, connfd, ret;
+    int listenfd, connfd, ret, fp;
+    ssize_t n;
     struct sockaddr_in servaddr, cliaddr;
     socklen_t cliaddrlen;
-    char buff[MAXLINE];
+    char buff_r[MAXLINE], buff_s[MAXLINE];
 
     typedef struct sockaddr SA;
 
@@ -54,17 +57,19 @@ main(int argc, char **argv) {
         connfd = accept(listenfd, (SA *)&cliaddr, &cliaddrlen);
         if (connfd == -1)
             err_exit("accept");
-
-        sprintf(buff, "hahaha");
-        write(connfd, buff, strlen(buff));
-        read(connfd, buff, MAXLINE);
-        printf("%s", buff);
+        
+        n = read(connfd, buff_r, MAXLINE);
+        fp = open("index.html", O_RDONLY);
+        read(fp, buff_s, MAXLINE);
+        close(fp);
+        //sprintf(buff_s, "hahaha");
+        write(connfd, buff_s, strlen(buff_s));
+        buff_r[n] = '\0';
+        printf("%s", buff_r);
 
         close(connfd);
     }
     close(listenfd);
     return 0;
 }
-
-
 
