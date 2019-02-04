@@ -2,7 +2,7 @@
 * 看了好久的书，来动手写一个server吧
 * 参考UNP，P140
 */
-
+ 
 #include<stdio.h>
 #include<stdlib.h>//exit
 #include<sys/types.h>//socket
@@ -14,6 +14,10 @@
 #include<string.h>//memset
 #include<sys/stat.h>//open
 #include<fcntl.h>//open
+#include<memory>//shared_ptr
+#include<vector>
+
+#include "Connection.h"
 
 #define SERV_PORT 80
 #define MAXLINE 4096
@@ -50,6 +54,8 @@ main(int argc, char **argv) {
     ret = listen(listenfd, 100);
     if (ret == -1)
         err_exit("listen");
+    
+    std::vector<std::shared_ptr<Connection> > conn_grp;
 
     for( ; ; ) {
         //man 2 accept
@@ -58,16 +64,21 @@ main(int argc, char **argv) {
         if (connfd == -1)
             err_exit("accept");
         
-        n = read(connfd, buff_r, MAXLINE);
-        fp = open("index.html", O_RDONLY);
-        read(fp, buff_s, MAXLINE);
-        close(fp);
+        conn_grp.push_back(std::make_shared<Connection>(connfd));
+        conn_grp[conn_grp.size()-1]->getRequest();
+        //Connection conn(connfd);
+        //conn.getRequest();
+        
+        //n = read(connfd, buff_r, MAXLINE);
+        //fp = open("index.html", O_RDONLY);
+        //read(fp, buff_s, MAXLINE);
+        //close(fp);
         //sprintf(buff_s, "hahaha");
-        write(connfd, buff_s, strlen(buff_s));
-        buff_r[n] = '\0';
-        printf("%s", buff_r);
+        //write(connfd, buff_s, strlen(buff_s));
+        //buff_r[n] = '\0';
+        //printf("%s", buff_r);
 
-        close(connfd);
+        //close(connfd);
     }
     close(listenfd);
     return 0;
