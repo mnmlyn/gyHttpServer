@@ -14,13 +14,15 @@
 #include<string.h>//memset
 #include<sys/stat.h>//open
 #include<fcntl.h>//open
+#include<sys/epoll.h>//epoll_create, epoll_ctl, epoll_wait
 #include<memory>//shared_ptr
-#include<vector>
+#include<list>
 
 #include "Connection.h"
 
 #define SERV_PORT 80
 #define MAXLINE 4096
+#define MAX_EVENTS 10
 
 void
 err_exit(const char *err) {
@@ -28,13 +30,23 @@ err_exit(const char *err) {
     exit(1);
 }
 
+void setnonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        err_exit("fcntl failed");
+    int r = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if(r < 0)
+        err_exit("fcntl failed");
+}
+
 int
 main(int argc, char **argv) {
-    int listenfd, connfd, ret, fp;
+    int listenfd, connfd, epfd, nfds, ret, fp, i;
     ssize_t n;
     struct sockaddr_in servaddr, cliaddr;
     socklen_t cliaddrlen;
     char buff_r[MAXLINE], buff_s[MAXLINE];
+    struct epoll_event ev, events[MAX_EVENTS];
 
     typedef struct sockaddr SA;
 
@@ -51,21 +63,55 @@ main(int argc, char **argv) {
     if (ret == -1)
         err_exit("bind");
     
-    ret = listen(listenfd, 100);
+    ret = listen(listenfd, 5);
     if (ret == -1)
         err_exit("listen");
-    
-    std::vector<std::shared_ptr<Connection> > conn_grp;
 
-    for( ; ; ) {
-        //man 2 accept
-        cliaddrlen = sizeof(cliaddr);
-        connfd = accept(listenfd, (SA *)&cliaddr, &cliaddrlen);
-        if (connfd == -1)
-            err_exit("accept");
+    epfd = epoll_create1(0);
+    if (epfd == -1)
+        err_exit("epoll_create1");
+
+    ev.events = EPOLLIN;
+    ev.data.fd = listenfd;
+    ret = epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev);
+    if (ret == -1)
+        err_exit("epoll_ctl: listenfd");
+    
+    std::list<std::shared_ptr<Connection> > conn_grp;
+
+    for ( ; ; ) {
+        nfds = epoll_wait(epfd, events, MAX_EVENTS, -1);
+        if (nfds == -1)
+            err_exit("epoll_wait");
+
+        for (i = 0; i < nfds; ++i) {
+            if (events[i].data.fd == listenfd) {
+                //man 2 accept
+                cliaddrlen = sizeof(cliaddr);
+                connfd = accept(listenfd, (SA *)&cliaddr, &cliaddrlen);
+                if (connfd == -1)
+                    err_exit("accept");
+                
+                setnonblocking(connfd);
+                
+                ev.events = EPOLLIN | EPOLLET;
+                ev.data.fd = connfd;
+                ret = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &ev);
+                if (ret == -1)
+                    err_exit("epoll_ctl: listenfd");
+            }
+            else {
+                connfd = events[i].data.fd;
+                conn_grp.push_front(std::make_shared<Connection>(connfd));
+                conn_grp.front()->getRequest();
+
+            }
+        }
+
+
         
-        conn_grp.push_back(std::make_shared<Connection>(connfd));
-        conn_grp[conn_grp.size()-1]->getRequest();
+        //conn_grp.push_front(std::make_shared<Connection>(connfd));
+        //conn_grp[conn_grp.size()-1]->getRequest();
         //Connection conn(connfd);
         //conn.getRequest();
         
@@ -80,6 +126,7 @@ main(int argc, char **argv) {
 
         //close(connfd);
     }
+    close(epfd);
     close(listenfd);
     return 0;
 }
