@@ -10,6 +10,8 @@
 #include<cstddef>//for size_t
 #include<sys/types.h>
 #include<sys/socket.h>
+#include<sys/stat.h>
+#include<fcntl.h>
 
 #include<iostream>//temp
 #include<cstring>

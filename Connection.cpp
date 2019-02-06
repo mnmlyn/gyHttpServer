@@ -7,7 +7,7 @@
 
 Connection::Connection(int fd):
             _fd(fd),
-            _buffer_size(200),
+            _buffer_size(4096),
             _isConnected(true),
             _request(nullptr),
             _status(INIT) {
@@ -60,20 +60,49 @@ void Connection::getRequest() {
 }
 
 void Connection::sendResponse() {
+    int fp, content_length;
     if (_status != INIT || !_isConnected || !_request) {
         LOG(DEBUG) << "Can not send Response\n";
         return;
     }
     LOG(DEBUG) << "prepare response\n";
-    std::string html("<html><head><title>gyHttpServer</title></head><body><p>hello http server!</p></body></html>");
     std::string ss("");
     ss += "HTTP/1.1 200 OK\r\n";
-    ss += "Content-Type: text/html;charset=ISO-8859-1\r\n";
-    ss += "Content-Length: " + std::to_string(html.size()) + "\r\n";
-    ss += "\r\n" + html;
     if (_request->url == "/") {
+        std::string html("<html><head><title>gyHttpServer</title></head><body><img src=\"/shit.jpg\"  alt=\"this is a shit\"/><p>hello http server!</p></body></html>");
+        ss += "Content-Type: text/html\r\n";
+        ss += "Content-Length: " + std::to_string(html.size()) + "\r\n";
+        ss += "\r\n" + html;
         LOG(DEBUG) << "url is /, send response\n";
         write(_fd, ss.c_str(), ss.size());
+    }
+    else if (_request->url == "/favicon.ico" 
+            || _request->url == "/shit.jpg") {
+        FILE *filep;
+        if (_request->url == "/favicon.ico")
+            filep = fopen("favicon.ico", "rb");
+        else if (_request->url == "/shit.jpg")
+            filep = fopen("shit.jpg", "rb");
+        fseek(filep, 0, SEEK_END);
+        content_length = ftell(filep);
+        fclose(filep);
+        if (_request->url == "/favicon.ico")
+            ss += "Content-Type: image/x-icon\r\n";
+        else if (_request->url == "/shit.jpg")
+            ss += "Content-Type: image/jpeg\r\n";
+        ss += "Content-Length: " + std::to_string(content_length) + "\r\n" + "\r\n";
+        write(_fd, ss.c_str(), ss.size());
+        
+        if (_request->url == "/favicon.ico")
+            fp = open("favicon.ico", O_RDONLY);
+        else if (_request->url == "/shit.jpg")
+            fp = open("shit.jpg", O_RDONLY);
+        uint8_t buff[128];
+        ssize_t n;
+        while (n = read(fp, buff, 128)) {
+            write(_fd, buff, n);
+        }
+        ::close(fp);
     }
     else{
         LOG(DEBUG) << "url not /, no response\n";
