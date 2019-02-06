@@ -104,7 +104,7 @@ main(int argc, char **argv) {
                 connfd = events[i].data.fd;
                 conn_grp.push_front(std::make_shared<Connection>(connfd));
                 conn_grp.front()->getRequest();
-
+                conn_grp.pop_front();
             }
         }
 
