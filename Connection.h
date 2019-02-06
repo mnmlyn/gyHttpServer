@@ -22,7 +22,7 @@
 
 class HttpRequest{
 public:
-    HttpRequest(){}
+    HttpRequest():is_finish(false){}
 public:
     enum METHOD {
         GET,
@@ -32,6 +32,7 @@ public:
     std::string url;
     size_t content_length;
     void *data;
+    bool is_finish;
 };
 
 class Connection{

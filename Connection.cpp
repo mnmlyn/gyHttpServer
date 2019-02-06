@@ -7,7 +7,7 @@
 
 Connection::Connection(int fd):
             _fd(fd),
-            _buffer_size(4096),
+            _buffer_size(200),
             _isConnected(true),
             _request(nullptr),
             _status(INIT) {
@@ -46,11 +46,17 @@ void Connection::getRequest() {
     }
     //n > 0
     _buffer_end += n;
-    _status = REQUEST_LINE;
+    if (_status == INIT)
+        _status = REQUEST_LINE;
     if (!_request)
         _request = new HttpRequest();
     parseHttpRequest();
-    sendResponse();
+    if (!_request->is_finish)
+        getRequest();
+    if (_request->is_finish){
+        sendResponse();
+        _request->is_finish = false;
+    }
 }
 
 void Connection::sendResponse() {
@@ -96,9 +102,9 @@ void Connection::parseHttpRequest() {
         LOG(DEBUG) << "GET\n";
 
         len = discard_chr(p, ' ', n);
-        if (len == -1)
+        if (len == WAIT_RECV_MORE)
             break;
-        else if (len == -2) {
+        else if (len == PARSE_ERR) {
             LOG(ERROR) << "discard spase after GET err\n";
             is_succ = false;
             break;
@@ -106,9 +112,9 @@ void Connection::parseHttpRequest() {
 
         //url
         len = count_until_chr_in_line(p, ' ', n);
-        if (len == -1)
+        if (len == WAIT_RECV_MORE)
             break;
-        else if (len == -2) {
+        else if (len == PARSE_ERR) {
             LOG(ERROR) << "url spase err\n";
             is_succ = false;
             break;
@@ -122,33 +128,36 @@ void Connection::parseHttpRequest() {
         
         //version discard
         len = discard_line(p, n);
-        if (len == -1)
+        if (len == WAIT_RECV_MORE)
             break;
-        else if (len == -2) {
+        else if (len == PARSE_ERR) {
             is_succ = false;
             LOG(ERROR) << "version discard err\n";
             break;
         }
         
         _status = HEADER;
+        _buffer_start = p;
     }
     
     if (_status == HEADER) {
         LOG(TRACE) << "parsing _status==HEADER\n";
         while (len = discard_line(p, n)) {
-            if (len == -2) {
+            if (len == PARSE_ERR) {
                 is_succ = false;
                 LOG(ERROR) << "header discard err\n";
                 break;
             }
-            else if (len == -1){
+            else if (len == WAIT_RECV_MORE){
                 LOG(TRACE) << "header wait recv\n";
                 break;
             }
+            _buffer_start = p;
         }
         if (len == 0) {
             LOG(TRACE) << "header finish\n";
             _status = BODY;
+            _buffer_start = p;
         }
         if (len < 0){
             LOG(TRACE) << "header len<0 err\n";
@@ -160,6 +169,8 @@ void Connection::parseHttpRequest() {
     if (_status == BODY){
         LOG(TRACE) << "parsing _status==BODY\n";
         _status = INIT;
+        _buffer_start = p;
+        _request->is_finish = true;
         LOG(TRACE) << "parse OK! _status==INIT\n";
     }
 
@@ -168,6 +179,11 @@ void Connection::parseHttpRequest() {
         this->close();
         LOG(ERROR) << "prase err, close\n";
     }
+    n = _buffer_end - _buffer_start;
+    memmove(_buffer, _buffer_start, n);
+    _buffer_start = _buffer;
+    _buffer_end = _buffer + n;
+    LOG(DEBUG) << "memmove()" << _buffer_end - _buffer_start << std::endl << n << std::endl;
 }
 
 
