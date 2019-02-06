@@ -1,4 +1,4 @@
-SRC_FILE=gy_server.cpp Connection.cpp
+SRC_FILE=gy_server.cpp Connection.cpp http_parse_util.cpp
 OUTPUT=server
 
 $(OUTPUT):$(SRC_FILE)

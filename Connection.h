@@ -17,6 +17,9 @@
 #include<string>
 #include<utility>//for move
 
+#include"logging.h"
+#include"http_parse_util.h"
+
 class HttpRequest{
 public:
     HttpRequest(){}
